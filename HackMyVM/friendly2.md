@@ -1,4 +1,4 @@
-# Writeup - Pentest 192.168.1.143 (friendly2)
+# Writeup - Pentest friendly2 (HackMyVM)
 
 **Máquina**: friendly2 (HackMyVM)  
 **OS**: Debian 11 (Bullseye) - Kernel 5.10.0-21-amd64  
