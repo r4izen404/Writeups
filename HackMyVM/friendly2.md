@@ -1,6 +1,6 @@
 # Writeup - Pentest 192.168.1.143 (friendly2)
 
-**Máquina**: friendly2 (VirtualBox)  
+**Máquina**: friendly2 (HackMyVM)  
 **OS**: Debian 11 (Bullseye) - Kernel 5.10.0-21-amd64  
 **IP**: 192.168.1.143  
 **Fecha**: 26 de mayo de 2026
