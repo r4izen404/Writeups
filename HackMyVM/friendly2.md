@@ -1,9 +1,10 @@
 # Writeup - Friendly2 (HackMyVM)
 
-**Máquina**: friendly2 (HackMyVM)  
+**Máquina**: friendly2
+**Plataforma:** HackMyVM
 **OS**: Debian 11 (Bullseye) - Kernel 5.10.0-21-amd64  
 **IP**: 192.168.1.143  
-**Fecha**: 26 de mayo de 2026
+**Objetivo:** Obtener User.txt y Root.txt
 
 ---
 
