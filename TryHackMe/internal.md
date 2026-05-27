@@ -1,9 +1,9 @@
 # Writeup - Internal (TryHackMe)
 
-**Máquina:** Internal
-**Plataforma:** TryHackMe
-**Sistema:** Ubuntu 18.04.4 LTS
-**IP:** 10.130.169.156
+**Máquina:** Internal  
+**Plataforma:** TryHackMe  
+**Sistema:** Ubuntu 18.04.4 LTS  
+**IP:** 10.130.169.156  
 **Objetivo:** Obtener User.txt y Root.txt
 
 ---
