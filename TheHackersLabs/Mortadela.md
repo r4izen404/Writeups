@@ -3,7 +3,7 @@
 **Plataforma:** TheHackersLabs  
 **Sistema:** Debian 12  
 **IP:** 10.10.10.6  
-**Objetivo:** Obtener user.txt y root.txt
+**Objetivo:** Obtener user.txt y root.txt  
 
 ---
 
