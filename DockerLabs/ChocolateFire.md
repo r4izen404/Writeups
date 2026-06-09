@@ -77,7 +77,7 @@ Acceso a la máquina como `chocolatitochingon`.
 
 ---
 
-## 4. Escalación horizontal — De `chocolatitochingon` a `pinguinacio`
+## 4. Escalada horizontal — De `chocolatitochingon` a `pinguinacio`
 
 Listando permisos sudo del usuario actual:
 
