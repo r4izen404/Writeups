@@ -6,74 +6,66 @@
 
 ## Resumen
 
-Secure Notes es un challenge de web que explota **prototype pollution via `$rename` de Mongoose** para bypassear la verificación de IP localhost en el endpoint `/flag`. El ataque combina la inyección del operador `$rename` de MongoDB con la hidratación de documentos de Mongoose para contaminar `Object.prototype._peername.address` y suplantar la IP local.
+Secure Notes es una app de notas con un endpoint `/flag` que solo responde si la petición viene de `localhost`. La vulnerabilidad está en que el endpoint `/update` pasa todo lo que recibe directamente a MongoDB, permitiendo manipular documentos usando operadores como `$rename`. Esto permite contaminar el prototipo de JavaScript para engañar al servidor y hacerle creer que la petición viene de `127.0.0.1`.
 
 ---
 
-## 1. Reconocimiento
+## 1. Cómo funciona la app
 
-### Endpoints
+| Endpoint | Qué hace |
+|----------|----------|
+| `/create` | Crea una nota |
+| `/get/:id` | Lee una nota |
+| `/update` | Modifica una nota |
+| `/flag` | Da la flag solo si vienes de `127.0.0.1` |
 
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| GET | `/` | Página principal |
-| GET | `/flag` | Devuelve la flag solo si `remoteAddress === '127.0.0.1'` |
-| POST | `/create` | Crea una nota |
-| GET | `/get/:noteId` | Obtiene una nota por ID |
-| POST | `/update` | Actualiza una nota |
-
-### Vulnerabilidad en `/update`
+### ¿Por qué es vulnerable `/update`?
 
 ```javascript
 app.post('/update', async (req, res) => {
-    try {
-        const { noteId } = req.body;
-        await Note.findByIdAndUpdate(noteId, req.body);
-        let result = await Note.find({ _id: noteId });
-        res.json(result);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ Message: "An error occurred" });
-    }
+    const { noteId } = req.body;
+    await Note.findByIdAndUpdate(noteId, req.body); // TODO el body se pasa a MongoDB
+    let result = await Note.find({ _id: noteId });
+    res.json(result);
 });
 ```
 
-`req.body` se pasa directamente como update a `findByIdAndUpdate`, permitiendo inyectar operadores de MongoDB como `$rename`.
+El servidor coge el JSON que le mandas y lo mete entero en MongoDB. Así puedes inyectar operadores como `$rename`, que MongoDB ejecuta directamente sin que Mongoose pueda filtrarlo.
 
-### Protección `/flag`
+### ¿Por qué no podemos acceder a `/flag`?
 
 ```javascript
 app.get('/flag', (req, res) => {
     const remoteAddress = req.connection.remoteAddress;
-    if (remoteAddress === '127.0.0.1' || remoteAddress === '::1' || remoteAddress === '::ffff:127.0.0.1') {
-        res.send(process.env.FLAG ?? 'HTB{f4k3_fl4g_f0r_t3st1ng}');
+    if (remoteAddress === '127.0.0.1') {
+        res.send(process.env.FLAG);
     } else {
         res.status(403).json({ Message: 'Access denied' });
     }
 });
 ```
 
-Solo accesible desde localhost.
+Comprueba que la IP del que pide sea `127.0.0.1` (localhost). Como estamos fuera del servidor, nuestra IP no lo es.
 
 ---
 
-## 2. Explotación — Prototype Pollution
+## 2. El truco — Prototype Pollution
+
+Node.js, para saber la IP del que hace una petición, mira internamente `socket._peername.address`. Si ese valor no existe, JavaScript lo busca en el prototipo de los objetos (`Object.prototype`). **Idea: contaminamos el prototipo para que `_peername.address` devuelva `127.0.0.1`.**
 
 ### Paso 1: Crear una nota
 
-Desde la interfaz web, hacer clic en **"+ New Note"** y crear una nota con:
+Desde la web, botón **"+ New Note"**:
 - **Title:** `127.0.0.1`
 - **Content:** `IPv4`
 
-### Paso 2: Inyectar `$rename`
+### Paso 2: Renombrar los campos con `$rename`
 
-Configurar **Burp Suite** como proxy e interceptar el tráfico. Desde la web, crear otra nota cualquiera. Burp capturará la petición POST a `/update`.
-
-Enviar la petición a **Repeater** y modificar el cuerpo JSON para inyectar el operador `$rename`:
+Con **Burp Suite** se intercepta la petición al crear/modificar una nota. Se envía a **Repeater** y se modifica el cuerpo a:
 
 ```json
 {
-  "noteId": "<ID de la nota creada en paso 1>",
+  "noteId": "<ID de la nota del paso 1>",
   "$rename": {
     "title": "__proto__._peername.address",
     "content": "__proto__._peername.family"
@@ -81,38 +73,51 @@ Enviar la petición a **Repeater** y modificar el cuerpo JSON para inyectar el o
 }
 ```
 
-Enviar la petición. Esto renombra los campos en MongoDB, creando la estructura:
+Esto le indica a MongoDB que renombre `title` → `__proto__._peername.address` y `content` → `__proto__._peername.family`. MongoDB lo ejecuta y la nota queda así:
+
 ```
-{ "__proto__": { "_peername": { "address": "127.0.0.1", "family": "IPv4" } } }
-```
-
-El operador `$rename` escapa el filtro `strict: true` de Mongoose porque se ejecuta del lado del servidor MongoDB.
-
-### Paso 3: Hidratar el documento
-
-Hacer clic en la nota creada desde la interfaz web. Al cargar la nota, el navegador hace un GET a `/get/<ID>` y Mongoose hidrata el documento, contaminando `Object.prototype`:
-- `Object.prototype._peername.address = "127.0.0.1"`
-- `Object.prototype._peername.family = "IPv4"`
-
-### Paso 4: Obtener la flag
-
-Node.js internamente lee `socket._peername.address` para obtener `remoteAddress`. Como `_peername` no está definido en el socket, JavaScript lo busca en la cadena de prototipos hasta `Object.prototype`, donde ahora existe.
-
-En la consola del navegador (F12 → Console), ejecutar:
-
-```javascript
-fetch('/flag').then(r => r.text()).then(console.log)
+{
+  "_id": "...",
+  "__proto__": {
+    "_peername": {
+      "address": "127.0.0.1",
+      "family": "IPv4"
+    }
+  }
+}
 ```
 
-O simplemente navegar a la URL `/flag` en otra pestaña. El servidor ve `remoteAddress === "127.0.0.1"` y devuelve la flag.
+Mongoose no puede bloquear `$rename` porque este operador se ejecuta directamente en MongoDB, antes de que Mongoose pueda filtrar nada.
+
+### Paso 3: Ver la nota (contaminar el prototipo)
+
+Se hace clic en la nota desde la web. El navegador hace un GET a `/get/<ID>` para cargarla. Al recibir el documento con el campo `__proto__`, Mongoose lo procesa y sin querer mete esos valores en `Object.prototype`:
+
+```
+Object.prototype._peername = { address: "127.0.0.1", family: "IPv4" }
+```
+
+Esto afecta a TODOS los objetos de JavaScript en el servidor.
+
+### Paso 4: Conseguir la flag
+
+Ahora, cuando el servidor recibe cualquier petición, Node.js mira `socket._peername.address`. Como el socket real no tiene `_peername`, JavaScript lo busca en el prototipo y encuentra `"127.0.0.1"`.
+
+Se abre otra pestaña y se navega a `/flag`:
+
+```
+http://154.57.164.83:30936/flag
+```
+
+El servidor cree que la petición viene de `127.0.0.1` y devuelve la flag.
 
 ---
 
-## Resumen de la cadena de ataque
+## Resumen
 
-| Paso | Técnica | Resultado |
-|-------|---------|-----------|
-| 1 | Crear nota con `title=127.0.0.1`, `content=IPv4` | Nota en MongoDB |
-| 2 | `$rename` `title` → `__proto__._peername.address`, `content` → `__proto__._peername.family` | Campos renombrados en MongoDB |
-| 3 | Fetch de la nota vía `/get` | Mongoose hidrata el documento → prototype pollution |
-| 4 | GET `/flag` | `remoteAddress` resuelve a `127.0.0.1` por prototype chain → flag `<REDACTED>` |
+| Paso | Qué haces | Por qué funciona |
+|-------|-----------|-----------------|
+| 1 | Creas nota con title=`127.0.0.1`, content=`IPv4` | Guardas los valores que luego inyectarás en el prototipo |
+| 2 | Usas `$rename` para convertir `title` → `__proto__._peername.address` y `content` → `__proto__._peername.family` | `$rename` se ejecuta en MongoDB, Mongoose no puede filtrarlo |
+| 3 | Haces clic en la nota para verla | Mongoose carga el documento y contamina `Object.prototype` |
+| 4 | Navegas a `/flag` | Node.js lee `_peername.address` del prototipo → cree que vienes de `127.0.0.1` → te da la flag |
